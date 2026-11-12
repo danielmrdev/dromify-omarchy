@@ -893,8 +893,19 @@ Item {
   }
 
   function setVolume(v) {
-    volume = v
-    _run(playerCtlProcess, [playerBin, "volume", String(Math.round(v))], function() {})
+    var next = Math.max(0, Math.min(100, Math.round(Number(v))))
+    if (!isFinite(next)) return
+    volume = next
+    _pendingVolume = next
+    volumeDebounce.restart()
+  }
+
+  function _flushVolume() {
+    if (_pendingVolume < 0) return
+    var next = _pendingVolume
+    if (!_run(playerCtlProcess, [playerBin, "volume", String(next)], function() {})) return
+    _pendingVolume = -1
+    _volumeInFlight = true
   }
 
   function stopPlayback() {
@@ -936,6 +947,16 @@ Item {
     onTriggered: root.pollNow()
   }
 
+  // Coalesce rapid wheel/keyboard changes and retain the latest value if a
+  // different transport command is still using playerCtlProcess.
+  property int _pendingVolume: -1
+  property bool _volumeInFlight: false
+  Timer {
+    id: volumeDebounce
+    interval: 120
+    onTriggered: root._flushVolume()
+  }
+
   Process {
     id: statusPollProcess
     property int _gen: 0
@@ -968,7 +989,8 @@ Item {
       root.playing = data.running === true && data.paused !== true
       root.position = Number(data.position) || 0
       root.duration = Number(data.duration) || 0
-      if (data.volume !== undefined) root.volume = Math.round(Number(data.volume))
+      if (data.volume !== undefined && root._pendingVolume < 0 && !root._volumeInFlight && !volumeDebounce.running)
+        root.volume = Math.max(0, Math.min(100, Math.round(Number(data.volume))))
       root.audioCodec = data.audioCodec || ""
       root.audioBitrate = Number(data.audioBitrate) || 0
       if (data.repeatMode === "off" || data.repeatMode === "all" || data.repeatMode === "one")
@@ -1239,6 +1261,8 @@ Item {
     onExited: function(exitCode) {
       var cb = playerCtlProcess._cb; playerCtlProcess._cb = null
       if (cb) cb()
+      root._volumeInFlight = false
+      if (root._pendingVolume >= 0) Qt.callLater(root._flushVolume)
     }
   }
 
