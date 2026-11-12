@@ -1249,8 +1249,12 @@ Panel {
           Keys.onDownPressed: nav.setVolume(nav.volume - 1)
           Keys.onRightPressed: nav.setVolume(nav.volume + 1)
           Keys.onUpPressed: nav.setVolume(nav.volume + 1)
-          Keys.onHomePressed: nav.setVolume(0)
-          Keys.onEndPressed: nav.setVolume(100)
+          Keys.onPressed: function(event) {
+            if (event.key === Qt.Key_Home) nav.setVolume(0)
+            else if (event.key === Qt.Key_End) nav.setVolume(100)
+            else return
+            event.accepted = true
+          }
         }
 
         Text {
