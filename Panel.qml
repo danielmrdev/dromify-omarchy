@@ -1169,7 +1169,7 @@ Panel {
           activeFocusOnTab: true
           Accessible.role: Accessible.Slider
           Accessible.name: "Playback volume"
-          Accessible.value: dragging ? liveValue : value
+          Accessible.description: Math.round(dragging ? liveValue : value) + "%"
           onMoved: volumeSlider.forceActiveFocus()
           onReleased: function(v) { nav.setVolume(v) }
 
