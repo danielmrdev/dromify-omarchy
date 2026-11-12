@@ -23,6 +23,9 @@ Omarchy theme, not the app's.
   favourites
 - Play/pause, next/previous, seek, shuffle, repeat; the queue is whatever
   list you played from
+- Adjust playback volume from 0–100 in the Now Playing panel; the slider
+  supports pointer, keyboard, and assistive-technology access and follows
+  the volume reported by the player
 - The playing track is marked in the list it came from
 - Now Playing shows elapsed/remaining time and a pill for what's actually
   streaming — `FLAC`, `MP3 320`, and so on
@@ -90,7 +93,9 @@ click next.
 **Panel** — click an artist/album/playlist to open it, a song to play it.
 `j`/`k`/`h`/`l` or arrows to move, `Enter`/`Space` to activate, `Esc` to go
 back. `/` searches, `f` favourites, `r` refreshes. Hardware media keys and
-`playerctl` work too.
+`playerctl` work too. In Now Playing, adjust volume with the slider; Tab to
+focus it, use arrow keys for 1% changes, or Home/End for mute/maximum. Wheel
+changes and slider drags are coalesced before they reach the player.
 
 ## Server URL: use HTTPS
 

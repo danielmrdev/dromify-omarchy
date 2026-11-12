@@ -1144,6 +1144,53 @@ Panel {
           font.pixelSize: Style.font.caption
         }
       }
+
+      RowLayout {
+        Layout.fillWidth: true
+        spacing: Style.space(8)
+
+        Text {
+          textFormat: Text.PlainText
+          text: "Volume"
+          color: root.dim
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.caption
+        }
+
+        PanelSlider {
+          id: volumeSlider
+          bar: root.bar
+          Layout.fillWidth: true
+          minimum: 0
+          maximum: 100
+          step: 1
+          integer: true
+          value: nav.volume
+          activeFocusOnTab: true
+          Accessible.role: Accessible.Slider
+          Accessible.name: "Playback volume"
+          Accessible.value: dragging ? liveValue : value
+          onMoved: volumeSlider.forceActiveFocus()
+          onReleased: function(v) { nav.setVolume(v) }
+
+          Keys.onLeftPressed: nav.setVolume(nav.volume - 1)
+          Keys.onDownPressed: nav.setVolume(nav.volume - 1)
+          Keys.onRightPressed: nav.setVolume(nav.volume + 1)
+          Keys.onUpPressed: nav.setVolume(nav.volume + 1)
+          Keys.onHomePressed: nav.setVolume(0)
+          Keys.onEndPressed: nav.setVolume(100)
+        }
+
+        Text {
+          textFormat: Text.PlainText
+          text: Math.round(volumeSlider.dragging ? volumeSlider.liveValue : nav.volume) + "%"
+          color: root.foreground
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.caption
+          horizontalAlignment: Text.AlignRight
+          Layout.preferredWidth: Style.space(34)
+        }
+      }
     }
 
     // Controls sit as a compact block to the right of the whole cover +
