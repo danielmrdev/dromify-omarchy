@@ -268,7 +268,8 @@ Panel {
         // what keeps everything inside the visible card instead of
         // overflowing past the right edge (which is what was clipping the
         // settings gear entirely and crowding the stars against the border).
-        width: parent.width
+        anchors.fill: parent
+        clip: true
         spacing: Style.space(10)
 
         // header
@@ -474,6 +475,8 @@ Panel {
         ColumnLayout {
           visible: nav.configured && !nav.showSettings
           Layout.fillWidth: true
+          Layout.fillHeight: true
+          Layout.minimumHeight: 0
           spacing: Style.space(10)
 
           // Pinned right under the header — visible the moment the panel
@@ -527,6 +530,8 @@ Panel {
           Item {
             id: browseClip
             Layout.fillWidth: true
+            Layout.fillHeight: expanded
+            Layout.minimumHeight: 0
             clip: true
             readonly property bool expanded: !nav.currentSong || !nav.browseCollapsed
             visible: implicitHeight > 0
@@ -543,6 +548,7 @@ Panel {
             ColumnLayout {
               id: browseColumn
               width: browseClip.width
+              height: browseClip.height
               spacing: Style.space(10)
 
               RowLayout {
@@ -631,10 +637,11 @@ Panel {
               Flickable {
                 id: panelFlick
                 Layout.fillWidth: true
+                Layout.fillHeight: true
                 Layout.preferredHeight: Math.min(listColumn.implicitHeight, Style.space(460))
                 // Bumped so the empty-state text below centers in the panel's
                 // body instead of sitting cramped just under the search field.
-                Layout.minimumHeight: (nav.navigableRows.length === 0 && nav.rows.length === 0 && !nav.listLoading) ? Style.space(160) : Style.space(80)
+                Layout.minimumHeight: 0
                 contentWidth: width
                 contentHeight: listColumn.implicitHeight
                 clip: true
@@ -1367,6 +1374,7 @@ Panel {
       ComboBox {
         id: audioOutputSelector
         Layout.fillWidth: true
+        Layout.preferredHeight: Style.spacing.controlHeight
         model: nav.audioOutputs
         textRole: "description"
         valueRole: "name"
@@ -1381,30 +1389,75 @@ Panel {
           if (index >= 0 && index < nav.audioOutputs.length)
             nav.setPreferredAudioOutput(nav.audioOutputs[index].name)
         }
+        background: BorderSurface {
+          color: Style.controlFill(audioOutputSelector.activeFocus, false, root.foreground, Color.accent)
+          borderSpec: Border.controlSpec(audioOutputSelector.activeFocus ? "focus" : "normal", root.foreground, Color.accent)
+          radius: Style.cornerRadius
+        }
+        indicator: Text {
+          text: "󰅀"
+          color: root.foreground
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.body
+          anchors.right: parent.right
+          anchors.rightMargin: Style.spacing.controlGap
+          anchors.verticalCenter: parent.verticalCenter
+        }
         contentItem: Text {
-          leftPadding: Style.space(8)
-          rightPadding: audioOutputSelector.indicator.width + Style.space(8)
+          leftPadding: Style.spacing.controlPaddingX
+          rightPadding: audioOutputSelector.indicator.width + Style.spacing.controlGap
           text: audioOutputSelector.displayText
           textFormat: Text.PlainText
           color: root.foreground
           font.family: root.fontFamily
-          font.pixelSize: Style.font.caption
+          font.pixelSize: Style.font.body
           verticalAlignment: Text.AlignVCenter
           elide: Text.ElideRight
         }
         delegate: ItemDelegate {
+          id: audioOutputDelegate
           required property var modelData
           width: audioOutputSelector.width
+          height: Style.spacing.popupRowHeight
+          highlighted: audioOutputSelector.highlightedIndex === index
+          background: Rectangle {
+            color: parent.highlighted
+              ? Style.hoverFillFor(root.foreground, Color.accent)
+              : "transparent"
+          }
           contentItem: Text {
             text: String(modelData.description || "").slice(0, 200)
             textFormat: Text.PlainText
-            color: root.foreground
+            color: audioOutputDelegate.highlighted
+              ? Style.hoverStateColor(root.foreground, Color.accent)
+              : root.foreground
             font.family: root.fontFamily
-            font.pixelSize: Style.font.caption
+            font.pixelSize: Style.font.body
             verticalAlignment: Text.AlignVCenter
             elide: Text.ElideRight
           }
-          highlighted: audioOutputSelector.highlightedIndex === index
+        }
+        popup: Popup {
+          y: audioOutputSelector.height + Style.spacing.xxs
+          width: audioOutputSelector.width
+          padding: Style.spacing.hairline
+          implicitHeight: Math.min(audioOutputSelector.count, 8) * Style.spacing.popupRowHeight
+            + topPadding + bottomPadding
+          background: BorderSurface {
+            color: Color.popups.background
+            borderSpec: Border.localOrSurfaceSpec(
+              "popups", "border", Color.popups.border, Color.popups.border, Style.normalBorderWidth
+            )
+            radius: Style.cornerRadius
+          }
+          contentItem: ListView {
+            clip: true
+            implicitHeight: contentHeight
+            model: audioOutputSelector.popup.visible ? audioOutputSelector.delegateModel : null
+            currentIndex: audioOutputSelector.highlightedIndex
+            boundsBehavior: Flickable.StopAtBounds
+            ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+          }
         }
       }
     }
