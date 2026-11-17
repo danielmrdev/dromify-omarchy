@@ -128,3 +128,58 @@ function nowPlayingLabel(song) {
   var title = song.title ? song.title : (song.artist || "")
   return title.length > 40 ? title.substring(0, 39) + "…" : title
 }
+
+// mpv's audio-device names are IPC identifiers, not user-facing text. Keep
+// selection to the auto backend and PipeWire names; in particular, never
+// expose raw ALSA device names to the panel.
+function isValidAudioOutputId(value) {
+  var id = String(value || "")
+  return id === "auto" || /^pipewire\/[A-Za-z0-9_.:@+=-]+(?:\/[A-Za-z0-9_.:@+=-]+)*$/.test(id)
+}
+
+function audioOutputLabel(value) {
+  return String(value || "")
+    .replace(/[\u0000-\u001f\u007f-\u009f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .substring(0, 200)
+}
+
+function normalizeAudioOutputs(devices) {
+  var result = [{ name: "auto", description: "System default" }]
+  var seen = { auto: true }
+  var list = safeArray(devices)
+  for (var i = 0; i < list.length; i++) {
+    var item = list[i] || {}
+    var id = String(item.name || "")
+    if (!isValidAudioOutputId(id) || id === "auto" || seen[id]) continue
+    // The bare "pipewire" alias is the system default under another name.
+    if (id === "pipewire") continue
+    seen[id] = true
+    result.push({
+      name: id,
+      description: audioOutputLabel(item.description) || id
+    })
+  }
+  if (!seen["pipewire/homepod_bridge"]) {
+    result.push({ name: "pipewire/homepod_bridge", description: "HomePods (homepod_bridge)" })
+  }
+  return result
+}
+
+function effectiveAudioOutput(preferred, devices, bridgeReady) {
+  var id = isValidAudioOutputId(preferred) ? String(preferred) : "auto"
+  if (id === "auto") return "auto"
+  var found = safeArray(devices).some(function(item) { return item && item.name === id })
+  if (!found || (id === "pipewire/homepod_bridge" && bridgeReady !== true)) return "auto"
+  return id
+}
+
+function audioOutputWarning(preferred, devices, bridgeReady) {
+  if (preferred === "auto") return ""
+  var present = safeArray(devices).some(function(item) { return item && item.name === preferred })
+  if (preferred === "pipewire/homepod_bridge" && (bridgeReady !== true || !present))
+    return "HomePods are unavailable. Dromify is using the system default until the bridge is ready."
+  if (!present) return "The selected audio output is unavailable. Dromify is using the system default."
+  return ""
+}

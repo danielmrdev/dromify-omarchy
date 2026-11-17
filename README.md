@@ -26,6 +26,10 @@ Omarchy theme, not the app's.
 - Adjust playback volume from 0–100 in the Now Playing panel; the slider
   supports pointer, keyboard, and assistive-technology access and follows
   the volume reported by the player
+- Choose a PipeWire output for Dromify's persistent `mpv` player, including
+  the system default; if the optional HomePod bridge is unavailable, Dromify
+  temporarily uses the system default and restores the saved choice when it
+  becomes ready
 - The playing track is marked in the list it came from
 - Now Playing shows elapsed/remaining time and a pill for what's actually
   streaming — `FLAC`, `MP3 320`, and so on
@@ -101,7 +105,10 @@ click next.
 back. `/` searches, `f` favourites, `r` refreshes. Hardware media keys and
 `playerctl` work too. In Now Playing, adjust volume with the slider; Tab to
 focus it, use arrow keys for 1% changes, or Home/End for mute/maximum. Wheel
-changes and slider drags are coalesced before they reach the player.
+changes and slider drags are coalesced before they reach the player. Choose
+the playback destination from **Output**; this only changes Dromify's `mpv`
+player and never changes the system-wide output or routes other applications.
+The output list refreshes when the panel opens and while playback is active.
 
 ## Server URL: use HTTPS
 
@@ -163,7 +170,15 @@ bin/dromify-player status
 
 ## Tests
 
-Run the helper-state test with `tests/queue-state.sh`. The live shell-reload
+Run the focused helper and audio-output tests with:
+
+```bash
+tests/queue-state.sh
+tests/audio-output.sh
+node tests/audio-output-policy.js
+```
+
+The live shell-reload
 integration test restarts Omarchy shell and requires unpaused Dromify playback.
 Run it explicitly:
 

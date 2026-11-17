@@ -47,6 +47,15 @@ Item {
   property real position: 0
   property real duration: 0
   property int volume: 100
+  property var audioOutputs: [{ name: "auto", description: "System default" }]
+  property var audioOutputDeviceIds: ["auto"]
+  property string preferredAudioOutput: "auto"
+  property string currentAudioOutput: "auto"
+  property bool audioOutputsLoaded: false
+  property bool homepodBridgeReady: false
+  property string audioOutputWarning: ""
+  property string audioOutputError: ""
+  property string _requestedAudioOutput: ""
   // What's actually being decoded right now — from mpv, not the source
   // file's own tags, so it reflects any server-side transcoding rather
   // than just what the original file happens to be.
@@ -900,6 +909,49 @@ Item {
     volumeDebounce.restart()
   }
 
+  function refreshAudioOutputs() {
+    if (!audioDevicesProcess.running) {
+      audioDevicesProcess.command = [playerBin, "audio-devices"]
+      audioDevicesProcess.running = true
+    }
+    if (!homepodStatusProcess.running) {
+      homepodStatusProcess.command = ["homepod-bridge", "status", "--json"]
+      homepodStatusProcess.running = true
+    }
+  }
+
+  function setPreferredAudioOutput(id) {
+    if (!Model.isValidAudioOutputId(id)) return
+    var available = audioOutputs.some(function(item) { return item && item.name === id })
+    if (!available) return
+    preferredAudioOutput = id
+    audioOutputError = ""
+    _applyPreferredAudioOutput()
+  }
+
+  function _updateAudioOutputWarning() {
+    audioOutputWarning = Model.audioOutputWarning(
+      preferredAudioOutput, _audioOutputPresence(), homepodBridgeReady
+    )
+  }
+
+  function _audioOutputPresence() {
+    return audioOutputDeviceIds.map(function(id) { return { name: id } })
+  }
+
+  function _applyPreferredAudioOutput() {
+    _updateAudioOutputWarning()
+    if (!audioOutputsLoaded || audioDeviceProcess.running) return
+    var target = Model.effectiveAudioOutput(
+      preferredAudioOutput, _audioOutputPresence(), homepodBridgeReady
+    )
+    if (target === currentAudioOutput) return
+    _requestedAudioOutput = target
+    audioDeviceProcess._target = target
+    audioDeviceProcess.command = [playerBin, "audio-device", target]
+    audioDeviceProcess.running = true
+  }
+
   function _flushVolume() {
     if (_pendingVolume < 0) return
     var next = _pendingVolume
@@ -945,6 +997,78 @@ Item {
     repeat: true
     running: false
     onTriggered: root.pollNow()
+  }
+
+  Timer {
+    id: audioOutputRefreshTimer
+    interval: 5000
+    repeat: true
+    running: root.playing
+    onRunningChanged: if (running) root.refreshAudioOutputs()
+    onTriggered: root.refreshAudioOutputs()
+  }
+
+  Process {
+    id: audioDevicesProcess
+    stdout: StdioCollector { id: audioDevicesOut; waitForEnd: true }
+    onExited: function(exitCode) {
+      if (exitCode !== 0 || audioDevicesOut.text.length > 65536) return
+      var parsed
+      try { parsed = JSON.parse(audioDevicesOut.text) } catch (e) { return }
+      if (!parsed || !Array.isArray(parsed.devices)) return
+      var normalized = Model.normalizeAudioOutputs(parsed.devices)
+      audioOutputDeviceIds = parsed.devices
+        .filter(function(item) { return item && Model.isValidAudioOutputId(item.name) })
+        .map(function(item) { return String(item.name) })
+      var current = String(parsed.current || "auto")
+      if (!Model.isValidAudioOutputId(current)) current = "auto"
+      audioOutputs = normalized
+      currentAudioOutput = current
+      if (!audioOutputsLoaded) {
+        audioOutputsLoaded = true
+        // Adopt the player's current route only once; subsequent fallback
+        // changes must never overwrite the user's preferred output.
+        if (normalized.some(function(item) { return item.name === current }))
+          preferredAudioOutput = current
+      }
+      _applyPreferredAudioOutput()
+    }
+  }
+
+  Process {
+    id: homepodStatusProcess
+    stdout: StdioCollector { id: homepodStatusOut; waitForEnd: true }
+    onExited: function(exitCode) {
+      var ready = false
+      if (exitCode === 0 && homepodStatusOut.text.length <= 4096) {
+        try {
+          var status = JSON.parse(homepodStatusOut.text)
+          ready = !!status && !Array.isArray(status) && status.ready === true
+        } catch (e) {}
+      }
+      if (root.homepodBridgeReady !== ready) {
+        root.homepodBridgeReady = ready
+        root._applyPreferredAudioOutput()
+      } else {
+        root._updateAudioOutputWarning()
+      }
+    }
+  }
+
+  Process {
+    id: audioDeviceProcess
+    property string _target: ""
+    stdout: StdioCollector { id: audioDeviceOut; waitForEnd: true }
+    onExited: function(exitCode) {
+      if (exitCode === 0) {
+        currentAudioOutput = audioDeviceProcess._target
+        audioOutputError = ""
+      } else {
+        audioOutputError = "Could not change Dromify's audio output."
+      }
+      audioDeviceProcess._target = ""
+      if (exitCode === 0) _applyPreferredAudioOutput()
+    }
   }
 
   // Coalesce rapid wheel/keyboard changes and retain the latest value if a

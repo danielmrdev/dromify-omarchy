@@ -149,6 +149,7 @@ Panel {
   onOpenedChanged: if (opened) {
     nav.cursorActive = false
     nav.focusSection = nav.searchActive ? "search" : "tabs"
+    nav.refreshAudioOutputs()
     nav.refreshStatus(function() {
       if (!nav.configured) nav.showSettings = true
       else if (!nav.loadedTabs[nav.activeTab]) nav.ensureTabLoaded(nav.activeTab)
@@ -1105,242 +1106,320 @@ Panel {
     }
   }
 
-  component NowPlayingBar: RowLayout {
+  component NowPlayingBar: ColumnLayout {
     id: npBar
-    spacing: Style.space(10)
+    spacing: Style.space(8)
 
     readonly property var song: nav.currentSong
 
-    Rectangle {
-      Layout.alignment: Qt.AlignVCenter
-      width: Style.space(56)
-      height: Style.space(56)
-      radius: Style.cornerRadius
-      color: Qt.darker(root.foreground, 4)
-      clip: true
-
-      Image {
-        anchors.fill: parent
-        fillMode: Image.PreserveAspectCrop
-        source: npBar.song && npBar.song.coverArt ? nav.coverSource(npBar.song.coverArt, 200) : ""
-        asynchronous: true
-      }
-      Component.onCompleted: if (npBar.song && npBar.song.coverArt) nav.requestCover(npBar.song.coverArt, 200)
-      Connections {
-        target: npBar
-        function onSongChanged() {
-          if (npBar.song && npBar.song.coverArt) nav.requestCover(npBar.song.coverArt, 200)
-        }
-      }
-    }
-
-    ColumnLayout {
+    RowLayout {
       Layout.fillWidth: true
-      Layout.alignment: Qt.AlignVCenter
-      spacing: Style.space(2)
+      spacing: Style.space(10)
 
-      RowLayout {
-        Layout.fillWidth: true
-        spacing: Style.space(6)
+      Rectangle {
+        Layout.alignment: Qt.AlignVCenter
+        width: Style.space(56)
+        height: Style.space(56)
+        radius: Style.cornerRadius
+        color: Qt.darker(root.foreground, 4)
+        clip: true
 
-        Text {
-          textFormat: Text.PlainText
-          Layout.fillWidth: true
-          Layout.minimumWidth: 0
-          text: npBar.song ? npBar.song.title : ""
-          color: root.foreground
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.bodySmall
-          font.bold: true
-          elide: Text.ElideRight
+        Image {
+          anchors.fill: parent
+          fillMode: Image.PreserveAspectCrop
+          source: npBar.song && npBar.song.coverArt ? nav.coverSource(npBar.song.coverArt, 200) : ""
+          asynchronous: true
         }
+        Component.onCompleted: if (npBar.song && npBar.song.coverArt) nav.requestCover(npBar.song.coverArt, 200)
+        Connections {
+          target: npBar
+          function onSongChanged() {
+            if (npBar.song && npBar.song.coverArt) nav.requestCover(npBar.song.coverArt, 200)
+          }
+        }
+      }
 
-        Rectangle {
-          id: formatPill
-          readonly property string formatLabel: Model.formatAudioLabel(nav.audioCodec, nav.audioBitrate)
-          visible: formatLabel !== ""
-          radius: height / 2
-          color: Qt.darker(root.foreground, 4)
-          implicitWidth: formatPillText.implicitWidth + Style.space(12)
-          implicitHeight: formatPillText.implicitHeight + Style.space(3)
+      ColumnLayout {
+        Layout.fillWidth: true
+        Layout.alignment: Qt.AlignVCenter
+        spacing: Style.space(2)
+
+        RowLayout {
+          Layout.fillWidth: true
+          spacing: Style.space(6)
 
           Text {
             textFormat: Text.PlainText
-            id: formatPillText
-            anchors.centerIn: parent
-            text: formatPill.formatLabel
+            Layout.fillWidth: true
+            Layout.minimumWidth: 0
+            text: npBar.song ? npBar.song.title : ""
+            color: root.foreground
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.bodySmall
+            font.bold: true
+            elide: Text.ElideRight
+          }
+
+          Rectangle {
+            id: formatPill
+            readonly property string formatLabel: Model.formatAudioLabel(nav.audioCodec, nav.audioBitrate)
+            visible: formatLabel !== ""
+            radius: height / 2
+            color: Qt.darker(root.foreground, 4)
+            implicitWidth: formatPillText.implicitWidth + Style.space(12)
+            implicitHeight: formatPillText.implicitHeight + Style.space(3)
+
+            Text {
+              textFormat: Text.PlainText
+              id: formatPillText
+              anchors.centerIn: parent
+              text: formatPill.formatLabel
+              color: root.dim
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+            }
+          }
+        }
+        Text {
+          textFormat: Text.PlainText
+          Layout.fillWidth: true
+          text: npBar.song ? npBar.song.artist : ""
+          color: root.dim
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.caption
+          elide: Text.ElideRight
+        }
+
+        RowLayout {
+          Layout.fillWidth: true
+          spacing: Style.space(6)
+
+          Text {
+            textFormat: Text.PlainText
+            text: Model.formatDuration(nav.position)
+            color: root.dim
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+          }
+
+          PanelSlider {
+            id: seekSlider
+            bar: root.bar
+            Layout.fillWidth: true
+            minimum: 0
+            maximum: Math.max(1, nav.duration)
+            value: nav.position
+            onMoved: function(v) { seekSlider.liveValue = v }
+            onReleased: function(v) { nav.seekFraction(nav.duration > 0 ? v / nav.duration : 0) }
+          }
+
+          Text {
+            textFormat: Text.PlainText
+            text: Model.formatRemaining(nav.position, nav.duration)
             color: root.dim
             font.family: root.fontFamily
             font.pixelSize: Style.font.caption
           }
         }
-      }
-      Text {
-        textFormat: Text.PlainText
-        Layout.fillWidth: true
-        text: npBar.song ? npBar.song.artist : ""
-        color: root.dim
-        font.family: root.fontFamily
-        font.pixelSize: Style.font.caption
-        elide: Text.ElideRight
+
       }
 
-      RowLayout {
-        Layout.fillWidth: true
+      // Controls sit as a compact block to the right of the whole cover +
+      // title/artist/seek column, vertically centered against it, rather
+      // than on their own full-width row underneath (which just burned
+      // vertical space without using the width already given to the info
+      // column any better).
+      ColumnLayout {
+        Layout.alignment: Qt.AlignVCenter
         spacing: Style.space(6)
 
-        Text {
-          textFormat: Text.PlainText
-          text: Model.formatDuration(nav.position)
-          color: root.dim
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.caption
-        }
+        RowLayout {
+          Layout.alignment: Qt.AlignHCenter
+          spacing: Style.space(6)
 
-        PanelSlider {
-          id: seekSlider
-          bar: root.bar
-          Layout.fillWidth: true
-          minimum: 0
-          maximum: Math.max(1, nav.duration)
-          value: nav.position
-          onMoved: function(v) { seekSlider.liveValue = v }
-          onReleased: function(v) { nav.seekFraction(nav.duration > 0 ? v / nav.duration : 0) }
-        }
-
-        Text {
-          textFormat: Text.PlainText
-          text: Model.formatRemaining(nav.position, nav.duration)
-          color: root.dim
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.caption
-        }
-      }
-
-      RowLayout {
-        Layout.fillWidth: true
-        spacing: Style.space(8)
-
-        Text {
-          textFormat: Text.PlainText
-          text: "Volume"
-          color: root.dim
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.caption
-        }
-
-        PanelSlider {
-          id: volumeSlider
-          bar: root.bar
-          Layout.fillWidth: true
-          minimum: 0
-          maximum: 100
-          step: 1
-          integer: true
-          value: nav.volume
-          activeFocusOnTab: true
-          Accessible.role: Accessible.Slider
-          Accessible.name: "Playback volume"
-          Accessible.description: Math.round(dragging ? liveValue : value) + "%"
-          onMoved: volumeSlider.forceActiveFocus()
-          onReleased: function(v) { nav.setVolume(v) }
-
-          Keys.onLeftPressed: nav.setVolume(nav.volume - 1)
-          Keys.onDownPressed: nav.setVolume(nav.volume - 1)
-          Keys.onRightPressed: nav.setVolume(nav.volume + 1)
-          Keys.onUpPressed: nav.setVolume(nav.volume + 1)
-          Keys.onPressed: function(event) {
-            if (event.key === Qt.Key_Home) nav.setVolume(0)
-            else if (event.key === Qt.Key_End) nav.setVolume(100)
-            else return
-            event.accepted = true
+          PanelActionButton {
+            fontSize: Style.space(16)
+            size: Style.space(32)
+            iconText: "󰒮"
+            tooltipText: "Previous"
+            foreground: root.foreground
+            fontFamily: root.fontFamily
+            enabled: !nav.loading && nav.queueIndex > 0
+            onClicked: nav.previous()
+          }
+          PanelActionButton {
+            fontSize: Style.space(16)
+            size: Style.space(32)
+            iconText: nav.playing && !nav.paused ? "󰏤" : "󰐊"
+            tooltipText: nav.paused ? "Play" : "Pause"
+            foreground: root.foreground
+            fontFamily: root.fontFamily
+            onClicked: nav.togglePause()
+          }
+          PanelActionButton {
+            fontSize: Style.space(16)
+            size: Style.space(32)
+            iconText: "󰒭"
+            tooltipText: "Next"
+            foreground: root.foreground
+            fontFamily: root.fontFamily
+            enabled: !nav.loading && nav.queueIndex >= 0 && nav.queueIndex < nav.queue.length - 1
+            onClicked: nav.next()
           }
         }
 
-        Text {
-          textFormat: Text.PlainText
-          text: Math.round(volumeSlider.dragging ? volumeSlider.liveValue : nav.volume) + "%"
-          color: root.foreground
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.caption
-          horizontalAlignment: Text.AlignRight
-          Layout.preferredWidth: Style.space(34)
+        RowLayout {
+          Layout.alignment: Qt.AlignHCenter
+          spacing: Style.space(6)
+
+          PanelActionButton {
+            iconText: "󰒝"
+            tooltipText: nav.shuffleEnabled ? "Shuffle: on" : "Shuffle: off"
+            foreground: nav.shuffleEnabled ? Color.accent : root.foreground
+            fontFamily: root.fontFamily
+            enabled: nav.queueMetadataAvailable && nav.queueIndex >= 0
+            onClicked: nav.toggleShuffle()
+          }
+          PanelActionButton {
+            iconText: nav.repeatMode === "one" ? "󰑘" : "󰑖"
+            tooltipText: "Repeat: " + nav.repeatMode
+            foreground: nav.repeatMode !== "off" ? Color.accent : root.foreground
+            fontFamily: root.fontFamily
+            onClicked: nav.cycleRepeat()
+          }
+          PanelActionButton {
+            iconText: (npBar.song && npBar.song.starred) ? "󰓎" : "󰓒"
+            tooltipText: "Favourite"
+            foreground: (npBar.song && npBar.song.starred) ? Color.accent : root.foreground
+            fontFamily: root.fontFamily
+            enabled: !!(npBar.song && npBar.song.id)
+            onClicked: nav.toggleFavorite(npBar.song)
+          }
         }
       }
     }
 
-    // Controls sit as a compact block to the right of the whole cover +
-    // title/artist/seek column, vertically centered against it, rather
-    // than on their own full-width row underneath (which just burned
-    // vertical space without using the width already given to the info
-    // column any better).
-    ColumnLayout {
-      Layout.alignment: Qt.AlignVCenter
-      spacing: Style.space(6)
+    RowLayout {
+      Layout.fillWidth: true
+      spacing: Style.space(10)
 
-      RowLayout {
-        Layout.alignment: Qt.AlignHCenter
-        spacing: Style.space(6)
+      Text {
+        textFormat: Text.PlainText
+        text: "Volume"
+        color: root.dim
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.caption
+        Layout.preferredWidth: Style.space(56)
+      }
 
-        PanelActionButton {
-          fontSize: Style.space(16)
-          size: Style.space(32)
-          iconText: "󰒮"
-          tooltipText: "Previous"
-          foreground: root.foreground
-          fontFamily: root.fontFamily
-          enabled: !nav.loading && nav.queueIndex > 0
-          onClicked: nav.previous()
-        }
-        PanelActionButton {
-          fontSize: Style.space(16)
-          size: Style.space(32)
-          iconText: nav.playing && !nav.paused ? "󰏤" : "󰐊"
-          tooltipText: nav.paused ? "Play" : "Pause"
-          foreground: root.foreground
-          fontFamily: root.fontFamily
-          onClicked: nav.togglePause()
-        }
-        PanelActionButton {
-          fontSize: Style.space(16)
-          size: Style.space(32)
-          iconText: "󰒭"
-          tooltipText: "Next"
-          foreground: root.foreground
-          fontFamily: root.fontFamily
-          enabled: !nav.loading && nav.queueIndex >= 0 && nav.queueIndex < nav.queue.length - 1
-          onClicked: nav.next()
+      PanelSlider {
+        id: volumeSlider
+        bar: root.bar
+        Layout.fillWidth: true
+        minimum: 0
+        maximum: 100
+        step: 1
+        integer: true
+        value: nav.volume
+        activeFocusOnTab: true
+        Accessible.role: Accessible.Slider
+        Accessible.name: "Playback volume"
+        Accessible.description: Math.round(dragging ? liveValue : value) + "%"
+        onMoved: volumeSlider.forceActiveFocus()
+        onReleased: function(v) { nav.setVolume(v) }
+
+        Keys.onLeftPressed: nav.setVolume(nav.volume - 1)
+        Keys.onDownPressed: nav.setVolume(nav.volume - 1)
+        Keys.onRightPressed: nav.setVolume(nav.volume + 1)
+        Keys.onUpPressed: nav.setVolume(nav.volume + 1)
+        Keys.onPressed: function(event) {
+          if (event.key === Qt.Key_Home) nav.setVolume(0)
+          else if (event.key === Qt.Key_End) nav.setVolume(100)
+          else return
+          event.accepted = true
         }
       }
 
-      RowLayout {
-        Layout.alignment: Qt.AlignHCenter
-        spacing: Style.space(6)
+      Text {
+        textFormat: Text.PlainText
+        text: Math.round(volumeSlider.dragging ? volumeSlider.liveValue : nav.volume) + "%"
+        color: root.foreground
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.caption
+        horizontalAlignment: Text.AlignRight
+        Layout.preferredWidth: Style.space(34)
+      }
+    }
 
-        PanelActionButton {
-          iconText: "󰒝"
-          tooltipText: nav.shuffleEnabled ? "Shuffle: on" : "Shuffle: off"
-          foreground: nav.shuffleEnabled ? Color.accent : root.foreground
-          fontFamily: root.fontFamily
-          enabled: nav.queueMetadataAvailable && nav.queueIndex >= 0
-          onClicked: nav.toggleShuffle()
+    RowLayout {
+      Layout.fillWidth: true
+      spacing: Style.space(10)
+
+      Text {
+        textFormat: Text.PlainText
+        text: "Output"
+        color: root.dim
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.caption
+        Layout.preferredWidth: Style.space(56)
+      }
+
+      ComboBox {
+        id: audioOutputSelector
+        Layout.fillWidth: true
+        model: nav.audioOutputs
+        textRole: "description"
+        valueRole: "name"
+        currentIndex: {
+          for (var i = 0; i < nav.audioOutputs.length; i++)
+            if (nav.audioOutputs[i].name === nav.preferredAudioOutput) return i
+          return 0
         }
-        PanelActionButton {
-          iconText: nav.repeatMode === "one" ? "󰑘" : "󰑖"
-          tooltipText: "Repeat: " + nav.repeatMode
-          foreground: nav.repeatMode !== "off" ? Color.accent : root.foreground
-          fontFamily: root.fontFamily
-          onClicked: nav.cycleRepeat()
+        Accessible.name: "Audio output"
+        Accessible.description: nav.audioOutputWarning || "Choose where Dromify plays audio."
+        onActivated: function(index) {
+          if (index >= 0 && index < nav.audioOutputs.length)
+            nav.setPreferredAudioOutput(nav.audioOutputs[index].name)
         }
-        PanelActionButton {
-          iconText: (npBar.song && npBar.song.starred) ? "󰓎" : "󰓒"
-          tooltipText: "Favourite"
-          foreground: (npBar.song && npBar.song.starred) ? Color.accent : root.foreground
-          fontFamily: root.fontFamily
-          enabled: !!(npBar.song && npBar.song.id)
-          onClicked: nav.toggleFavorite(npBar.song)
+        contentItem: Text {
+          leftPadding: Style.space(8)
+          rightPadding: audioOutputSelector.indicator.width + Style.space(8)
+          text: audioOutputSelector.displayText
+          textFormat: Text.PlainText
+          color: root.foreground
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.caption
+          verticalAlignment: Text.AlignVCenter
+          elide: Text.ElideRight
+        }
+        delegate: ItemDelegate {
+          required property var modelData
+          width: audioOutputSelector.width
+          contentItem: Text {
+            text: String(modelData.description || "").slice(0, 200)
+            textFormat: Text.PlainText
+            color: root.foreground
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+            verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideRight
+          }
+          highlighted: audioOutputSelector.highlightedIndex === index
         }
       }
+    }
+
+    Text {
+      visible: nav.audioOutputWarning !== "" || nav.audioOutputError !== ""
+      Layout.fillWidth: true
+      Layout.leftMargin: Style.space(66)
+      text: nav.audioOutputError || nav.audioOutputWarning
+      textFormat: Text.PlainText
+      color: root.urgent
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.caption
+      wrapMode: Text.Wrap
+      Accessible.name: text
     }
   }
 }

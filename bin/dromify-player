@@ -35,6 +35,8 @@
 #   dromify-player pause | resume | toggle-pause | stop
 #   dromify-player seek <seconds>           # absolute position
 #   dromify-player volume <0-100>
+#   dromify-player audio-devices            # filtered mpv PipeWire outputs
+#   dromify-player audio-device <id>        # set this player's output
 #   dromify-player set-repeat <off|all|one> # off, loop-playlist, or loop-file
 #   dromify-player status                   -> JSON transport snapshot
 #   dromify-player save-queue-state          # read song metadata JSON from stdin
@@ -289,6 +291,42 @@ cmd_volume() {
   cmd_simple "volume" "{\"command\":[\"set_property\",\"volume\",$vol]}"
 }
 
+cmd_audio_devices() {
+  is_running || { echo '{"devices":[],"current":"auto"}'; return 0; }
+  local reply
+  reply=$(ipc_send $'{"command":["get_property","audio-device-list"]}\n{"command":["get_property","audio-device"]}') \
+    || fail "could not query mpv audio outputs"
+  jq -cs '
+    def devices:
+      if (.[0].data | type) == "array" then
+        [.[0].data[]
+          | select(type == "object" and (.name | type) == "string")
+          | select(.name == "auto" or (.name | startswith("pipewire/")))
+          | {name: .name, description: ((.description // .name) | tostring | .[0:512])}]
+      else [] end;
+    {
+      devices: devices,
+      current: (if (.[1].data | type) == "string" then .[1].data else "auto" end)
+    }' <<<"$reply"
+}
+
+cmd_audio_device() {
+  local id="${1:-}" request reply
+  [[ "$id" == "auto" || "$id" =~ ^pipewire/[A-Za-z0-9_.:@+=-]+(/[A-Za-z0-9_.:@+=-]+)*$ ]] \
+    || fail "invalid audio output id"
+  is_running || fail "mpv is not running"
+  # Verify the requested identifier is currently advertised by this mpv,
+  # rather than allowing arbitrary property values.
+  local devices
+  devices=$(cmd_audio_devices)
+  jq -e --arg id "$id" '.devices | any(.name == $id)' <<<"$devices" >/dev/null \
+    || fail "audio output is not available"
+  request=$(jq -cn --arg id "$id" '{command:["set_property","audio-device",$id]}')
+  reply=$(ipc_send "$request") || fail "could not set mpv audio output"
+  jq -e '.error == "success"' <<<"$reply" >/dev/null || fail "mpv rejected audio output"
+  echo '{"ok":true}'
+}
+
 # Repeat is delegated entirely to mpv's own loop properties rather than
 # tracked client-side: "off" clears both, "all" loops the playlist (so a
 # "weak" next/previous at either end wraps instead of stopping), "one"
@@ -478,6 +516,8 @@ main() {
     toggle-pause) cmd_simple "toggle-pause" '{"command":["cycle","pause"]}' ;;
     seek) cmd_seek "${1:-0}" ;;
     volume) cmd_volume "${1:-100}" ;;
+    audio-devices) cmd_audio_devices ;;
+    audio-device) cmd_audio_device "${1:-}" ;;
     set-repeat) cmd_set_repeat "${1:-}" ;;
     status) cmd_status ;;
     save-queue-state) cmd_save_queue_state ;;
@@ -486,7 +526,7 @@ main() {
     restore) cmd_restore ;;
     stop) cmd_stop ;;
     quit) cmd_quit ;;
-    *) fail "unknown command '$cmd' (expected: ensure|load-queue|reorder-tail|next|previous|pause|resume|toggle-pause|seek|volume|set-repeat|status|save-queue-state|queue-state|clear-queue-state|restore|stop|quit)" ;;
+    *) fail "unknown command '$cmd' (expected: ensure|load-queue|reorder-tail|next|previous|pause|resume|toggle-pause|seek|volume|audio-devices|audio-device|set-repeat|status|save-queue-state|queue-state|clear-queue-state|restore|stop|quit)" ;;
   esac
 }
 
