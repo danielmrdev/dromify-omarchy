@@ -30,9 +30,21 @@ Panel {
     return title && artist ? title + " — " + artist : title || artist
   }
   readonly property bool nowPlayingVisible: showNowPlaying && nowPlayingText !== ""
+  readonly property int barCoverSize: Math.max(64, Math.round(barSize * 2))
+  readonly property real barCoverInset: Style.space(3)
+  readonly property real barCoverExtent: Math.max(1, barSize - barCoverInset * 2)
   // Dim by default; the bar pill lights this up to Color.accent instead
   // while something is actually playing.
   readonly property color barIconColor: Qt.darker(barForeground, 1.55)
+
+  function requestBarCover() {
+    var song = nav.currentSong
+    if (nowPlayingVisible && song && song.coverArt)
+      nav.requestCover(song.coverArt, barCoverSize)
+  }
+
+  onNowPlayingVisibleChanged: requestBarCover()
+  onBarCoverSizeChanged: requestBarCover()
 
   // One Service instance is shared by every monitor's copy of this bar
   // widget (the shell instantiates "service"-kind plugins once, globally —
@@ -186,9 +198,31 @@ Panel {
       horizontalAlignment: Text.AlignHCenter
       verticalAlignment: Text.AlignVCenter
       text: "󰝚"
+      visible: !barCover.visible
       color: (nav.playing && !nav.paused) ? Color.accent : root.barIconColor
       font.family: root.fontFamily
       font.pixelSize: Style.font.body
+    }
+
+    Image {
+      id: barCover
+      x: (root.barSize - width) / 2
+      y: (root.barSize - height) / 2
+      width: root.barCoverExtent
+      height: root.barCoverExtent
+      visible: root.nowPlayingVisible && nav.currentSong && nav.currentSong.coverArt
+        && status === Image.Ready
+      source: root.nowPlayingVisible && nav.currentSong && nav.currentSong.coverArt
+        ? nav.coverSource(nav.currentSong.coverArt, root.barCoverSize) : ""
+      fillMode: Image.PreserveAspectCrop
+      asynchronous: true
+      clip: true
+      Component.onCompleted: root.requestBarCover()
+    }
+
+    Connections {
+      target: nav
+      function onCurrentSongChanged() { root.requestBarCover() }
     }
 
     Text {
@@ -362,7 +396,7 @@ Panel {
           Toggle {
             Layout.fillWidth: true
             label: "Show now playing"
-            description: "Show current song and artist beside Dromify in the bar."
+            description: "Show the current song and artist in the bar, with its cover replacing the note icon."
             foreground: root.foreground
             accent: Color.accent
             fontFamily: root.fontFamily

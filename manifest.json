@@ -28,7 +28,7 @@
         "key": "showNowPlaying",
         "type": "boolean",
         "label": "Show now playing",
-        "description": "Show the current song and artist in the bar."
+        "description": "Show the current song and artist in the bar, with its cover replacing the note icon."
       }
     ]
   }

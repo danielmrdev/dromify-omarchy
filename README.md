@@ -43,8 +43,9 @@ Omarchy theme, not the app's.
 - One session shared across every monitor — same queue and now-playing
   wherever you open the bar
 - Optional bar label for the current song and artist, controlled by the
-  **Show now playing** switch in Dromify settings (off by default); rotated in
-  vertical bars, with a tooltip for truncated titles
+  **Show now playing** switch in Dromify settings (off by default); its cover
+  replaces the note icon while shown. The label rotates in vertical bars and
+  has a tooltip for truncated titles.
 - Keyboard-driven: `j`/`k` to move, `Enter` to activate, `/` to search, `f`
   to favourite, `r` to refresh, `Esc` to go back
 - Passwords live in the desktop keyring (`secret-tool` / libsecret), not in
